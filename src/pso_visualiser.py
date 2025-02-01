@@ -376,15 +376,19 @@ def select_equation() -> None:
     buttons = []
     button_start_height = menu_title_rect.centery + 60
     button_gap = button_font.get_height() * 1.5
-    for i, instance in enumerate(problems):
+    index = 0
+
+
+    for name, problem in enumerate(problems):
         buttons.append(Button(
             image=None,
-            pos=(WIDTH // 2, button_start_height + button_gap * i),
-            text_input=instance,
+            pos=(WIDTH // 2, button_start_height + button_gap * index),
+            text_input=name,
             font=button_font,
             base_color=(0, 0, 0),
             hovering_color="White"
         ))
+        index += 1
         
     while True:
         screen.fill(background)
@@ -430,7 +434,7 @@ def main_menu() -> None:
     # Init buttons
     button_font = pygame.font.Font(font_path, 24)
     
-    file_instance_button = Button(
+    std_eqn_button = Button(
         image=None,
         pos=(WIDTH // 2, HEIGHT // 2),
         text_input="Solve Standard Equations",
@@ -439,9 +443,9 @@ def main_menu() -> None:
         hovering_color="White"
     )
 
-    custom_instance_button = Button(
+    custom_eqn_button = Button(
         image=None,
-        pos=(file_instance_button.x_pos, file_instance_button.y_pos + file_instance_button.font.get_height() * 2),
+        pos=(std_eqn_button.x_pos, std_eqn_button.y_pos + std_eqn_button.font.get_height() * 2),
         text_input="Solve Custom Equation",
         font=button_font,
         base_color=(0, 0, 0),
@@ -475,10 +479,12 @@ def main_menu() -> None:
         menu_title_rect_2 = menu_title_2.get_rect(center=(WIDTH // 2, (HEIGHT // 4) + menu_title_1.get_height()))
         
         screen.blit(menu_title_2, menu_title_rect_2)
+
         # Display buttons
-        for button in [file_instance_button, custom_instance_button]:
+        for button in [std_eqn_button, custom_eqn_button]:
             button.changeColor(mouse_pos)
             button.update(screen)
+
         try:
             for event in pygame.event.get():
                 # Quit game
@@ -486,16 +492,17 @@ def main_menu() -> None:
                     quit_gui()
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     # Load instance from file
-                    if file_instance_button.checkForInput(mouse_pos):
+                    if std_eqn_button.checkForInput(mouse_pos):
                         select_equation()
                     # Create instance on screen
-                    if custom_instance_button.checkForInput(mouse_pos):
+                    if custom_eqn_button.checkForInput(mouse_pos):
                         make_equation()
                     # Quit game
                     if quit_button.checkForInput(mouse_pos):
                         quit_gui()
         except SystemError as e:
             print(e)
+
         clock.tick(60)
         pygame.display.update()
 
