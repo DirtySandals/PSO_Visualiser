@@ -2,7 +2,7 @@ import numpy as np
 import sys
 import random
 from typing import Optional
-import OptimizationProblems as op
+from .OptimizationProblems import *
 from abc import ABC, abstractmethod
 
 class Particle:
@@ -181,7 +181,7 @@ class Random50(Topology):
 
 class Swarm:
     """Swarm class acts as a container for all the particles"""
-    def __init__(self, population_size: int, problem: op.OptimizationProblem):
+    def __init__(self, population_size: int, problem: OptimizationProblem):
         """Initialise variables"""
         self.particles = []
         self.dimension = problem.dimension_size
@@ -240,7 +240,7 @@ class ParticleInitializer:
             particle.velocity *= scale
 
     @staticmethod
-    def uniform_random_positions(swarm: Swarm, problem: op.OptimizationProblem):
+    def uniform_random_positions(swarm: Swarm, problem: OptimizationProblem):
         """Initialise swarm with uniform random position within problem bounds"""
         # Obtain the maximum and minimum values for each dimensions
         max = problem.boundaries[:, 1]
@@ -249,7 +249,7 @@ class ParticleInitializer:
             particle.position = np.random.uniform(low=min, high=max)
 
     @staticmethod
-    def initial_bounds_uniform_positions(swarm: Swarm, problem: op.OptimizationProblem):
+    def initial_bounds_uniform_positions(swarm: Swarm, problem: OptimizationProblem):
         """Initialise swarm with uniform random position within problem initial bounds"""
         # Obtain the maximum and minimum values for each dimensions
         max = problem.initialization_bounds[:, 1]
@@ -262,7 +262,7 @@ class Optimizer(ABC):
     """
     Base class for PSO algorithms, for a given OptimizationProblem
     """
-    def __init__(self, problem: op.OptimizationProblem, population_size: int, inertia: bool):
+    def __init__(self, problem: OptimizationProblem, population_size: int, inertia: bool):
         """Initialise problem and swarm"""
         self.problem = problem
         self.swarm = Swarm(population_size, problem)
@@ -352,7 +352,7 @@ class StandardPSO(Optimizer):
     """ 
     Class is used for problem 6,7,9
     """
-    def __init__(self, problem: op.OptimizationProblem, population_size: int):
+    def __init__(self, problem: OptimizationProblem, population_size: int):
         super().__init__(problem, population_size)
 
         # Initialise the swarm's positions
@@ -388,7 +388,7 @@ class InertiaWeightPSO(Optimizer):
     Class is used for problem 8.
     Uses non-linear inertia weight
     """
-    def __init__(self, problem: op.OptimizationProblem, population_size: int, topology_type: Topology):
+    def __init__(self, problem: OptimizationProblem, population_size: int, topology_type: Topology):
         super().__init__(problem, population_size)
 
         ParticleInitializer.uniform_random_positions(self.swarm, self.problem)

@@ -39,7 +39,7 @@ class AckleyProblem(OptimizationProblem):
         super().__init__(boundaries, dimension_size)
         self.inverse_dimension_size = 1 / dimension_size
 
-    def evaluate(self, position: np.array) -> float:        
+    def evaluate(self, position: np.array) -> float:   
         """
         Evaluate takes a particle as a parameter and returns the ackley function value
         of its position: -20 * exp{-0.2√(1/D *∑Di=1 (xi^2)} - exp{(1/D)*∑Di=1 (cos (2πxi))} + 20 + e
@@ -123,7 +123,7 @@ class GeneralisedRosenbrock(OptimizationProblem):
     def __init__(self, dimension_size: int):
         """Initialise the problem's variables"""
         # Define boundaries and optimum of problem
-        boundaries = [-30, 30]
+        boundaries = [-2.048, 2.048]
         super().__init__(boundaries, dimension_size)
 
     def evaluate(self, position: np.array) -> float:        
@@ -135,11 +135,12 @@ class GeneralisedRosenbrock(OptimizationProblem):
             raise ValueError("Particle's position of incorrect size")
 
         def transform(index, value):
+            index = index[0]
             t_value = 100 * (position[index + 1] - value ** 2) ** 2
             t_value = t_value + (value - 1) ** 2
             return t_value
 
-        transformed_values = np.array([transform(i, v) for i, v in np.ndenumerate(position[:self.dimension_size])])
+        transformed_values = np.array([transform(i, v) for i, v in np.ndenumerate(position[:self.dimension_size - 1])])
 
         function_val = np.sum(transformed_values)
 
@@ -165,7 +166,7 @@ class GeneralisedSchwefel(OptimizationProblem):
         if self.dimension_size != position.size:
             raise ValueError("Particle's position of incorrect size")
 
-        sqrt_arr = np.sqrt(position)
+        sqrt_arr = np.sqrt(np.abs(position))
         sin_arr = np.sin(sqrt_arr)
         result_arr = position * sin_arr
 
@@ -286,50 +287,5 @@ class GoldsteinPrice(OptimizationProblem):
         prod2 = 30 + ((2 * x1 - 3 * x2) ** 2) * (18 - 32 * x1 + 12 * (x1 ** 2) + 48 * x2 - 36 * x1 * x2 + 27 * (x2 ** 2))
 
         function_val = prod1 * prod2
-
-        return function_val
-
-class Shekel(OptimizationProblem):
-    """
-    The Shekel class is derived from the optimzation class and implements the shekel function.
-    The function has shekel_num local minima, with global minima occurring at: [4, 4, 4, 4]
-    """
-    def __init__(self, shekel_num: int):
-        """Initialise the problem's variables"""
-        # Define boundaries and optimum of problem
-        boundaries = [0, 10]
-        super().__init__(boundaries, 4)
-        
-        self.shekel_num = shekel_num
-        self.calc_matrices(self.shekel_num)
-
-    def calc_matrices(self, shekel_num):
-        """Calculates Shekel function matrix and vector of constants"""
-        self.beta = (1 / 10) * np.array([1, 2, 2, 4, 4, 6, 3, 7, 5, 5])
-
-        odd_row = [4, 1, 8, 6, 3, 2, 5, 8, 6, 7]
-        even_row = [4, 1, 8, 6, 7, 9, 3, 1, 2, 3.6]
-        # Create 4x10 matrix of constants
-        self.c_matrix = np.tile([odd_row, even_row], 2)
-
-    def evaluate(self, position: np.array) -> float:        
-        """
-        Evaluate takes a particle as a parameter and returns the shekel function value
-        of its position: ∑Di=1(∑4j=1((xj + aij)^2) + ci)
-        """
-        if self.dimension_size != position.size:
-            raise ValueError("Particle's position of incorrect size")
-
-        function_val = 0
-
-        for i in range(self.shekel_num):
-            inner_sum = 0
-            for j in range(4):
-                inner_sum += (position[j] - self.c_matrix[j][i]) ** 2
-                inner_sum += self.beta[j]
-            
-            function_val += inner_sum
-
-        function_val *= -1
 
         return function_val

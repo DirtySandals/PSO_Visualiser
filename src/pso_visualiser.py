@@ -1,11 +1,14 @@
 import pygame
 import sys
 from numpy import add
+import numpy as np
 from enum import Enum
 from typing import List, Tuple
 from Button import Button
-from pso_lib import pso_lib
-from pso_lib import OptimizationProblems as op
+from pso_lib import *
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 # Initialise pygame and screen variables
 pygame.init()
 
@@ -21,7 +24,15 @@ clock = pygame.time.Clock()
 font_path = "./assets/font.ttf"
 
 problems = {
-    "Ackley Problem": op.AckleyProblem
+    "Sphere/Parabola": SphereParabola,
+    "Schwefel 1.2": Schwefel,
+    "Generalised Rosenbrock": GeneralisedRosenbrock,
+    "Generalised Schwefel": GeneralisedSchwefel,
+    "Generalised Rastrigin": GeneralisedRastrigin,
+    "Ackley Problem": AckleyProblem,
+    "Generalised Griewank": GeneralisedGriewank,
+    "Six-Hump Camel-Back": SixHumpCamelBack,
+    "Goldstein-Price": GoldsteinPrice
 }
 
 back_button = Button(
@@ -46,8 +57,6 @@ graph = pygame.Rect(graph_center_x - graph_width // 2, graph_center_y - graph_he
 
 # Quit function to exit game gracefully
 def quit_gui() -> None:
-    global process
-    process.cleanup()
     pygame.quit()
     sys.exit()
     
@@ -376,10 +385,8 @@ def select_equation() -> None:
     buttons = []
     button_start_height = menu_title_rect.centery + 60
     button_gap = button_font.get_height() * 1.5
-    index = 0
 
-
-    for name, problem in enumerate(problems):
+    for index, name in enumerate(problems):
         buttons.append(Button(
             image=None,
             pos=(WIDTH // 2, button_start_height + button_gap * index),
@@ -388,7 +395,6 @@ def select_equation() -> None:
             base_color=(0, 0, 0),
             hovering_color="White"
         ))
-        index += 1
         
     while True:
         screen.fill(background)
@@ -419,11 +425,8 @@ def select_equation() -> None:
                         # Load file on process
                         process.load_file(button.text_input)
                         # Retrieve coords from file
-                        instance_coords = parse_instance(path)
-                        # Scale coords to fit on screen
-                        instance_coords = instance_scaler(instance_coords, graph_center_x, graph_center_y, graph_width, graph_height)
                         # Go to next page to configure algorithm
-                        configure_algorithm(instance_coords)
+                        configure_algorithm()
                         break
         
         clock.tick(60)
@@ -460,7 +463,29 @@ def main_menu() -> None:
             base_color=(0, 0, 0),
             hovering_color="White"
     )
+    ackley_func = SixHumpCamelBack()
+    min = ackley_func.boundaries[0][0]
+    max = ackley_func.boundaries[0][1]
+
+    x = np.linspace(min, max, 100)
+    y = np.linspace(min, max, 100)
+
+    X, Y = np.meshgrid(x, y)
+
     
+    Z = np.array([ackley_func.evaluate(np.array([X[i][j], Y[i][j]])) for i in range(X.shape[0]) for j in range(X.shape[1])])
+    Z = Z.reshape(X.shape)
+
+    Z_min, Z_max = Z.min(), Z.max()
+    Z_norm = (Z - Z_min) / (Z_max - Z_min)  # Normalize between 0 and 1
+    
+    # Convert Z values into a colormap
+    colormap = cm.viridis  # Change colormap if needed
+    colors = (colormap(Z_norm)[:, :, :3] * 255).astype(np.uint8)  # RGB values
+
+    # Convert the color grid into a Pygame surface
+    heatmap_surface = pygame.surfarray.make_surface(colors.transpose(1, 0, 2))
+    scaled_surface  =pygame.transform.scale(heatmap_surface, (500, 500))
     while True:
         screen.fill(background)
         
@@ -484,7 +509,7 @@ def main_menu() -> None:
         for button in [std_eqn_button, custom_eqn_button]:
             button.changeColor(mouse_pos)
             button.update(screen)
-
+        screen.blit(scaled_surface, ((WIDTH - scaled_surface.get_width()) // 2, (HEIGHT - scaled_surface.get_height()) // 2))
         try:
             for event in pygame.event.get():
                 # Quit game

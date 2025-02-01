@@ -1,2 +1,2 @@
-import pso_lib
-import OptimizationProblems
+from .pso_lib import *
+from .OptimizationProblems import *
