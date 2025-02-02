@@ -1,2 +1,2 @@
 from .pso_lib import *
-from .OptimizationProblems import *
+from .optimiztion_problems import *

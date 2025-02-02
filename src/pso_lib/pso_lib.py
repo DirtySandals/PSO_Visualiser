@@ -2,7 +2,7 @@ import numpy as np
 import sys
 import random
 from typing import Optional
-from .OptimizationProblems import *
+from .optimiztion_problems import *
 from abc import ABC, abstractmethod
 
 class Particle:
@@ -317,7 +317,6 @@ class Optimizer(ABC):
                 best_found_fitness = self.min_fitness
 
             if (generation - best_generation) > early_stopping_tolerance:
-                print(f"Early stopping at generation {generation + 1}")
                 break
     
     def calculate_nonlinear_inertia_weight(self, t, T):

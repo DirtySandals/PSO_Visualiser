@@ -1,5 +1,3 @@
-from pso_lib import pso_lib
-from pso_lib import OptimizationProblems as OP
 from pso_lib import *
 import numpy as np
 import queue
@@ -9,7 +7,12 @@ from functools import partial
 import time
 
 class PSOThreadRunner:
+    """
+    PSOThreadRunner runs the pso_lib Optimizer in a separate thread
+    and controls the output of particle generations using a queue of 'frames'
+    """
     def __init__(self):
+        # Init variables
         self.pso_thread = None
         self.pso = None
         self.early_stopping_tolerance = 100
@@ -20,16 +23,19 @@ class PSOThreadRunner:
         self.num_frames = 0
 
     def load_alg(self, pso: Optimizer):
+        """Accepts an algorithm to use"""
         self.pso = pso
-        self.update_particles(self.pso.swarm.particles)
+        self.update_particles(self.pso.swarm.particles) # Create initial particles positions frame
 
     def run_pso(self, max_generations: int):
+        """Runs the PSO algorithm"""
         if self.pso is None:
             raise TypeError("pso algorithm has not been loaded.")
 
+        # If algorithm is already running, stop it and go again
         if self.pso_thread is not None:
             self.stop()
-
+        # Run algorithm in parallel
         self.pso_thread = threading.Thread(
             target=partial(
                 self.pso.optimize,
@@ -42,9 +48,15 @@ class PSOThreadRunner:
         self.pso_thread.start()
 
     def stop(self):
+        """
+        Stops the PSO algorithm from running and joins respective
+        thread
+        """
+        # Reinitialise variables
         self.particles = None
         self.num_frames = 0
         self.particle_queue = queue.Queue()
+
         if self.pso_thread is None:
             return
         
@@ -54,11 +66,12 @@ class PSOThreadRunner:
         if not self.pso_thread.is_alive():
             return
         
-        self.pso.stop()
-        self.pso_thread.join()
+        self.pso.stop() # Stop algorithm
+        self.pso_thread.join() # Kill thread
         self.pso_thread = None
 
     def update_particles(self, particles: List[Particle]):
+        """Add new generation of particle positions to queue"""
         new_particles = np.empty((len(particles), 2))
 
         for index, particle in np.ndenumerate(particles):
@@ -68,15 +81,21 @@ class PSOThreadRunner:
         self.num_frames += 1
 
     def get_particles(self):
+        """
+        Getter function for particles but controls the frequency in
+        in which generations can be accessed
+        """
+        # If no new generations in queue, use current generation
         if self.num_frames == 0:
             if self.particles is None:
                 return None
             else:
                 return self.particles.copy()
 
+        # Calculate time since last 'frame' taken
         time_now = time.time_ns()
         time_diff = (time_now - self.last_frame_time) // 1_000_000
-
+        # If time has been long enough since last 'frame'
         if time_diff > self.frame_diff:
             self.last_frame_time = time_now
             self.num_frames -= 1

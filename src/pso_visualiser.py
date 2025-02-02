@@ -1,31 +1,32 @@
 import pygame
 import sys
+import os
 from numpy import add
-import numpy as np
 from enum import Enum
-from typing import List, Tuple
 from Button import Button
 from pso_lib import *
-import numpy as np
 from PSOThreadRunner import PSOThreadRunner
 from pso_display import *
 
 # Initialise pygame and screen variables
 pygame.init()
 
-WIDTH, HEIGHT = 800, 600
+WIDTH, HEIGHT = 800, 600 # Dimensions of screen
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("TSP")
+pygame.display.set_caption("PSO Solver")
 
-background = (81, 213, 224)
+background = (81, 213, 224) # Background colour
 
 clock = pygame.time.Clock()
 
 pso_runner = PSOThreadRunner()
 
-font_path = "./assets/font.ttf"
+# Global font
+current_directory = os.path.dirname(os.path.abspath(__file__))
+font_path =  os.path.join(current_directory, "./assets/font.ttf")
 
+# Map of functions to be used in PSO
 problems = {
     "Parabola": SphereParabola(2),
     "Schwefel 1.2": Schwefel(2),
@@ -38,6 +39,7 @@ problems = {
     "Goldstein-Price": GoldsteinPrice()
 }
 
+# Map of topology options
 topology_options = {
     "GBest": Gbest,
     "LBest": Lbest,
@@ -45,6 +47,7 @@ topology_options = {
     "Random50": Random50
 }
 
+# Back button used by most pages
 back_button = Button(
     image=None,
     pos=(WIDTH // 10, HEIGHT // 10),
@@ -54,9 +57,11 @@ back_button = Button(
     hovering_color="White"
 )
 
+# Particle characteristics
 particle_color = (255, 0, 0)
 particle_radius = 3
 
+# Equation heatmap characteristics
 heatmap_side_length = 450
 heatmap_center_x = WIDTH // 2
 heatmap_center_y = HEIGHT // 2
@@ -79,8 +84,9 @@ def display_alg(problem: OptimizationProblem, heatmap_filename: str, standard_ps
         hovering_color="White"
     )
     
-    pop_size = int(pop_size)
+    pop_size = int(pop_size) # Convert to int
 
+    # Initialise PSO algorithm
     pso = None
 
     if standard_pso:
@@ -91,7 +97,9 @@ def display_alg(problem: OptimizationProblem, heatmap_filename: str, standard_ps
 
     pso_runner.load_alg(pso)
     
-    heatmap = pygame.image.load(heatmap_filename)
+    # Retrieve heatmap from assets
+    heatmap_path = os.path.join(current_directory, heatmap_filename)
+    heatmap = pygame.image.load(heatmap_path)
 
     while True:
         screen.fill(background)
@@ -106,10 +114,12 @@ def display_alg(problem: OptimizationProblem, heatmap_filename: str, standard_ps
 
         screen.blit(heatmap, (heatmap_left, heatmap_top))
 
-        particles = pso_runner.get_particles()
+        particles = pso_runner.get_particles() # Get generation of particles
     
         if particles is not None:
+            # Scale particles to heatmap
             particles = scale_particles(particles, problem.boundaries, heatmap_side_length, heatmap_left, heatmap_top)
+            # Draw all particles
             for particle in particles:
                 pygame.draw.circle(screen, particle_color, (particle[0], particle[1]), particle_radius)
 
@@ -126,6 +136,7 @@ def display_alg(problem: OptimizationProblem, heatmap_filename: str, standard_ps
                 # Start the algorithm when button pressed
                 if start_button.checkForInput(mouse_pos):
                     pso_runner.stop()
+                    # If pso already running, restart it
                     if pso is not None:
                         if standard_pso:
                             pso = StandardPSO(problem, pop_size)            
@@ -150,8 +161,8 @@ def configure_algorithm(problem: OptimizationProblem, heatmap_filename: str) -> 
         return current_value
     # Enum type for what algorithm type is chosen
     class AlgorithmType(Enum):
-        InverOver = 0
-        Custom = 1
+        Standard = 0
+        IW = 1
         
     selected_algorithm = None
     
@@ -221,7 +232,7 @@ def configure_algorithm(problem: OptimizationProblem, heatmap_filename: str) -> 
             hovering_color="White"
     )
     
-    custom_button = Button(
+    iw_button = Button(
             image=None,
             pos=(WIDTH // 2, select_rect.centery + select_rect.height + 90),
             text_input="Inertia Weight Algorithm",
@@ -248,7 +259,7 @@ def configure_algorithm(problem: OptimizationProblem, heatmap_filename: str) -> 
         back_button.changeColor(mouse_pos)
         back_button.update(screen)
         
-        if selected_algorithm is AlgorithmType.Custom:
+        if selected_algorithm is AlgorithmType.IW:
             next_button.changeColor(mouse_pos)
             next_button.update(screen)
         # Display algorithm select
@@ -258,10 +269,10 @@ def configure_algorithm(problem: OptimizationProblem, heatmap_filename: str) -> 
             standard_button.changeColor(mouse_pos)
             standard_button.update(screen)
 
-            custom_button.changeColor(mouse_pos)
-            custom_button.update(screen)
+            iw_button.changeColor(mouse_pos)
+            iw_button.update(screen)
         # Display custom algorithm options   
-        elif selected_algorithm is AlgorithmType.Custom:
+        elif selected_algorithm is AlgorithmType.IW:
             custom_font = pygame.font.Font(font_path, 32)
             custom_title = custom_font.render("Custom Algorithm", True, (0, 0, 0), None)
             custom_rect = custom_title.get_rect(center=(WIDTH // 2, HEIGHT // 6))
@@ -313,13 +324,13 @@ def configure_algorithm(problem: OptimizationProblem, heatmap_filename: str) -> 
                 # Select algorithm
                 if selected_algorithm is None:
                     if standard_button.checkForInput(mouse_pos):
-                        selected_algorithm = AlgorithmType.InverOver
+                        selected_algorithm = AlgorithmType.Standard
                         display_alg(problem, heatmap_filename, True, "200")
                         return
-                    elif custom_button.checkForInput(mouse_pos):
-                        selected_algorithm = AlgorithmType.Custom
+                    elif iw_button.checkForInput(mouse_pos):
+                        selected_algorithm = AlgorithmType.IW
                 # Select option
-                elif selected_algorithm is AlgorithmType.Custom:
+                elif selected_algorithm is AlgorithmType.IW:
                     if next_button.checkForInput(mouse_pos):
                         display_alg(problem, heatmap_filename, False, selected_population_size, selected_topology)
                         return
@@ -342,6 +353,7 @@ def select_equation() -> None:
     button_start_height = menu_title_rect.centery + 60
     button_gap = button_font.get_height() * 1.5
 
+    # Create list of buttons for each optimisation problem
     for index, name in enumerate(problems):
         buttons.append(Button(
             image=None,
@@ -379,7 +391,7 @@ def select_equation() -> None:
                 for button in buttons:
                     if button.checkForInput(mouse_pos):
                         problem = problems[button.text_input]
-                        file_path = f"./assets/{button.text_input}.png"
+                        file_path = f"./assets/{button.text_input}.png" # File path to heatmap png file
                         # Go to next page to configure algorithm
                         configure_algorithm(problem, file_path)
                         break
