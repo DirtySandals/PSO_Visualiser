@@ -27,7 +27,7 @@ pso_runner = PSOThreadRunner()
 font_path = "./assets/font.ttf"
 
 problems = {
-    "Sphere/Parabola": SphereParabola(2),
+    "Parabola": SphereParabola(2),
     "Schwefel 1.2": Schwefel(2),
     "Generalised Rosenbrock": GeneralisedRosenbrock(2),
     "Generalised Schwefel": GeneralisedSchwefel(2),
@@ -55,7 +55,7 @@ back_button = Button(
 )
 
 particle_color = (255, 0, 0)
-particle_radius = 5
+particle_radius = 3
 
 heatmap_side_length = 450
 heatmap_center_x = WIDTH // 2
@@ -69,7 +69,7 @@ def quit_gui() -> None:
     sys.exit()
     
 # Displays screen for showing algorithm work    
-def display_alg(problem: OptimizationProblem, standard_pso: bool, pop_size: str, topology: str="") -> None:
+def display_alg(problem: OptimizationProblem, heatmap_filename: str, standard_pso: bool, pop_size: str, topology: str="") -> None:
     start_button = Button(
         image=None,
         pos=(WIDTH // 2, 550),
@@ -81,7 +81,17 @@ def display_alg(problem: OptimizationProblem, standard_pso: bool, pop_size: str,
     
     pop_size = int(pop_size)
 
-    heatmap = generate_heatmap(pygame, problem, heatmap_side_length, 100)
+    pso = None
+
+    if standard_pso:
+        pso = StandardPSO(problem, pop_size)            
+    else:
+        topology = topology_options[topology]
+        pso = InertiaWeightPSO(problem, pop_size, topology)
+
+    pso_runner.load_alg(pso)
+    
+    heatmap = pygame.image.load(heatmap_filename)
 
     while True:
         screen.fill(background)
@@ -99,7 +109,7 @@ def display_alg(problem: OptimizationProblem, standard_pso: bool, pop_size: str,
         particles = pso_runner.get_particles()
     
         if particles is not None:
-            particles = scale_particles(particles, heatmap_side_length, heatmap_left, heatmap_top)
+            particles = scale_particles(particles, problem.boundaries, heatmap_side_length, heatmap_left, heatmap_top)
             for particle in particles:
                 pygame.draw.circle(screen, particle_color, (particle[0], particle[1]), particle_radius)
 
@@ -116,15 +126,13 @@ def display_alg(problem: OptimizationProblem, standard_pso: bool, pop_size: str,
                 # Start the algorithm when button pressed
                 if start_button.checkForInput(mouse_pos):
                     pso_runner.stop()
-                    pso = None
+                    if pso is not None:
+                        if standard_pso:
+                            pso = StandardPSO(problem, pop_size)            
+                        else:
+                            pso = InertiaWeightPSO(problem, pop_size, topology)
 
-                    if standard_pso:
-                        pso = StandardPSO(problem, pop_size)            
-                    else:
-                        topology = topology_options[topology]
-                        pso = InertiaWeightPSO(problem, pop_size, topology)
-
-                    pso_runner.load_alg(pso)
+                        pso_runner.load_alg(pso)
                     
                     pso_runner.run_pso(10000)
         
@@ -132,7 +140,7 @@ def display_alg(problem: OptimizationProblem, standard_pso: bool, pop_size: str,
         pygame.display.update()
         
 # Allows user to choose genetic algorithm they want to use on their problem
-def configure_algorithm(problem: OptimizationProblem) -> None:
+def configure_algorithm(problem: OptimizationProblem, heatmap_filename: str) -> None:
     # Handle clicking on button
     def handle_option_click(options, mouse_pos, current_value):
         for option in options:
@@ -152,14 +160,13 @@ def configure_algorithm(problem: OptimizationProblem) -> None:
     selected_population_size = "50"
 
     # Create grid layout for options
-    option_rows = [200, 350]
+    option_row = 300
     option_cols = [250, 550]
 
     option_cell = []
     
-    for row in option_rows:
-        for col in option_cols:
-            option_cell.append((col, row))
+    for col in option_cols:
+        option_cell.append((col, option_row))
 
     # Intialise options
     subtitle_option_separation = 32
@@ -217,7 +224,7 @@ def configure_algorithm(problem: OptimizationProblem) -> None:
     custom_button = Button(
             image=None,
             pos=(WIDTH // 2, select_rect.centery + select_rect.height + 90),
-            text_input="Custom Algorithm",
+            text_input="Inertia Weight Algorithm",
             font=alg_choice_font,
             base_color=(0, 0, 0),
             hovering_color="White"
@@ -278,7 +285,7 @@ def configure_algorithm(problem: OptimizationProblem) -> None:
                 option["button"].update(screen)
 
             population_text = subtitle_font.render("Population Size", True, (0, 0, 0), None)
-            population_rect = population_text.get_rect(center=option_cell[3])
+            population_rect = population_text.get_rect(center=option_cell[1])
             
             screen.blit(population_text, population_rect)
             # If option selected, change color to red, else color is black
@@ -307,82 +314,18 @@ def configure_algorithm(problem: OptimizationProblem) -> None:
                 if selected_algorithm is None:
                     if standard_button.checkForInput(mouse_pos):
                         selected_algorithm = AlgorithmType.InverOver
-                        display_alg(problem, True, "200")
+                        display_alg(problem, heatmap_filename, True, "200")
                         return
                     elif custom_button.checkForInput(mouse_pos):
                         selected_algorithm = AlgorithmType.Custom
                 # Select option
                 elif selected_algorithm is AlgorithmType.Custom:
                     if next_button.checkForInput(mouse_pos):
-                        display_alg(problem, False, selected_population_size, selected_topology)
+                        display_alg(problem, heatmap_filename, False, selected_population_size, selected_topology)
                         return
                     
                     selected_topology = handle_option_click(topologies, mouse_pos, selected_topology)
                     selected_population_size = handle_option_click(population_sizes, mouse_pos, selected_population_size)
-        
-        clock.tick(60)
-        pygame.display.update()
-        
-# Allows user to create an instance by clicking on screen
-def make_equation() -> None:
-    equation_str = ""
-
-    solve_button = Button(
-        image=None,
-        pos=(WIDTH // 2, HEIGHT - 60),
-        text_input="Solve Problem",
-        font=pygame.font.Font(font_path, 24),
-        base_color=(0, 0, 0),
-        hovering_color="White"
-    )
-    # Warnings to display
-    show_empty_warning = False
-    warning_font = pygame.font.Font(font_path, 12)
-    warning_pos = (WIDTH // 2, HEIGHT - 100)
-    warning_color = (255, 0, 0)
-    
-    while True:
-        screen.fill(background)
-        
-        mouse_pos = pygame.mouse.get_pos()
-
-        back_button.changeColor(mouse_pos)
-        back_button.update(screen)
-        
-        pygame.draw.rect(screen, graph_color, graph)
-        
-        # Display Warning logic
-        if len(equation_str) == 0:
-            pass
-            
-        if show_empty_warning:
-            warning = warning_font.render("You Must Have More Than Three Entries", True, warning_color, None)
-            warning_rect = warning.get_rect(center=warning_pos)
-            
-            screen.blit(warning, warning_rect) 
-
-        solve_button.changeColor(mouse_pos)
-        solve_button.update(screen)
-
-        for event in pygame.event.get():
-            # Quit game
-            if event.type == pygame.QUIT:
-                quit_gui()
-            elif event.type == pygame.KEYUP:
-                equation_str += pygame.key.name(event.key)
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                # Back button
-                if back_button.checkForInput(mouse_pos):
-                    return
-                # Solve button, go to algorithm select page
-                if solve_button.checkForInput(mouse_pos):
-                    # If 3 or less points, too little amount of cities, warn user
-                    if len(equation_str) == 0:
-                        show_empty_warning = True
-                    # Progress to next page
-                    else:
-                        equation = process.load_instance(equation_str)
-                        configure_algorithm(equation)
         
         clock.tick(60)
         pygame.display.update()
@@ -436,8 +379,9 @@ def select_equation() -> None:
                 for button in buttons:
                     if button.checkForInput(mouse_pos):
                         problem = problems[button.text_input]
+                        file_path = f"./assets/{button.text_input}.png"
                         # Go to next page to configure algorithm
-                        configure_algorithm(problem)
+                        configure_algorithm(problem, file_path)
                         break
         
         clock.tick(60)
@@ -450,17 +394,8 @@ def main_menu() -> None:
     
     std_eqn_button = Button(
         image=None,
-        pos=(WIDTH // 2, HEIGHT // 2),
-        text_input="Solve Standard Equations",
-        font=button_font,
-        base_color=(0, 0, 0),
-        hovering_color="White"
-    )
-
-    custom_eqn_button = Button(
-        image=None,
-        pos=(std_eqn_button.x_pos, std_eqn_button.y_pos + std_eqn_button.font.get_height() * 2),
-        text_input="Solve Custom Equation",
+        pos=(WIDTH // 2, HEIGHT // 1.5),
+        text_input="Start",
         font=button_font,
         base_color=(0, 0, 0),
         hovering_color="White"
@@ -472,7 +407,7 @@ def main_menu() -> None:
             text_input="Quit",
             font=pygame.font.Font(font_path, 16),
             base_color=(0, 0, 0),
-            hovering_color="White"
+            hovering_color="Red"
     )
     
     while True:
@@ -485,19 +420,18 @@ def main_menu() -> None:
         # Display title
         title_font = pygame.font.Font(font_path, 24)
         menu_title_1 = title_font.render("Particle Swarm Optimisation", True, (0, 0, 0), None)
-        menu_title_rect_1 = menu_title_1.get_rect(center=(WIDTH // 2, HEIGHT // 4))
+        menu_title_rect_1 = menu_title_1.get_rect(center=(WIDTH // 2, HEIGHT // 2.5))
         
         screen.blit(menu_title_1, menu_title_rect_1)
 
         menu_title_2 = title_font.render("2D Equation Solver", True, (0, 0, 0), None)
-        menu_title_rect_2 = menu_title_2.get_rect(center=(WIDTH // 2, (HEIGHT // 4) + menu_title_1.get_height()))
+        menu_title_rect_2 = menu_title_2.get_rect(center=(WIDTH // 2, (HEIGHT // 2.5) + menu_title_1.get_height() + 25))
         
         screen.blit(menu_title_2, menu_title_rect_2)
 
-        # Display buttons
-        for button in [std_eqn_button, custom_eqn_button]:
-            button.changeColor(mouse_pos)
-            button.update(screen)
+        # Display button
+        std_eqn_button.changeColor(mouse_pos)
+        std_eqn_button.update(screen)
 
         try:
             for event in pygame.event.get():
@@ -508,9 +442,6 @@ def main_menu() -> None:
                     # Load instance from file
                     if std_eqn_button.checkForInput(mouse_pos):
                         select_equation()
-                    # Create instance on screen
-                    if custom_eqn_button.checkForInput(mouse_pos):
-                        make_equation()
                     # Quit game
                     if quit_button.checkForInput(mouse_pos):
                         quit_gui()

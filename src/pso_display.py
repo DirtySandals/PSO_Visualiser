@@ -3,32 +3,25 @@ import numpy as np
 import matplotlib.cm as cm
 import pygame
 
-def scale_particles(particles, heatmap_length: int, left: int, top: int):
-    min_x = particles[0][0]
-    max_x = particles[0][0]
-    min_y = particles[0][1]
-    max_y = particles[0][1]
-    # Find min and max of x and y
-    for particle in particles:
-        min_x = min(min_x, particle[0])
-        max_x = max(max_x, particle[0])
-        min_y = min(min_y, particle[1])
-        max_y = max(max_y, particle[1])
-
-    left = left + heatmap_length // 2
-    top = top + heatmap_length // 2
+def scale_particles(particles, boundaries, heatmap_length: int, left: int, top: int):
+    center_x = left + heatmap_length // 2
+    center_y = top + heatmap_length // 2
 
     # Scale points to fit in graph exactly
-    scale_x = (heatmap_length) / (max_x - min_x) if max_x - min_x > 0 else 1
-    scale_y = (heatmap_length) / (max_y - min_y) if max_y - min_y > 0 else 1
+    scale_x = (heatmap_length // 2) / boundaries[0][1]
+    scale_y = (heatmap_length // 2) / boundaries[1][1]
     # Scale and translate each point to fit in graph
     for i in range(len(particles)):
-        particles[i][0] = left + (particles[i][0]) * scale_x     
-        particles[i][1] = top + (particles[i][1]) * scale_y
+        particles[i][0] = center_x + (particles[i][0]) * scale_x     
+        particles[i][1] = center_y + (particles[i][1]) * scale_y
+        if abs(particles[i][0] - center_x) > heatmap_length // 2:
+            particles[i][0] = -100
+        elif abs(particles[i][1] - center_y) > heatmap_length // 2:
+            particles[i][1] = -100
 
     return particles
 
-def generate_heatmap(pygame: pygame, problem: OptimizationProblem, length: int, divisions: int):
+def generate_heatmap(pygame: pygame, problem: OptimizationProblem, length: int, divisions: int, filename: str):
     min = problem.boundaries[0][0]
     max = problem.boundaries[0][1]
     x = np.linspace(min, max, divisions)
@@ -50,5 +43,5 @@ def generate_heatmap(pygame: pygame, problem: OptimizationProblem, length: int, 
     # Convert the color grid into a Pygame surface
     heatmap_surface = pygame.surfarray.make_surface(colors.transpose(1, 0, 2))
     scaled_surface = pygame.transform.scale(heatmap_surface, (length, length))
-
+    pygame.image.save(scaled_surface, filename)
     return scaled_surface

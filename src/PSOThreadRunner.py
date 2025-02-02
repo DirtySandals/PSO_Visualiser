@@ -5,13 +5,14 @@ import numpy as np
 import queue
 from typing import List
 import threading
+from functools import partial
 import time
 
 class PSOThreadRunner:
     def __init__(self):
         self.pso_thread = None
         self.pso = None
-        self.early_stopping_tolerance = 500
+        self.early_stopping_tolerance = 100
         self.particles = None
         self.particle_queue = queue.Queue()
         self.last_frame_time = time.time_ns()
@@ -20,10 +21,7 @@ class PSOThreadRunner:
 
     def load_alg(self, pso: Optimizer):
         self.pso = pso
-
-        pop_size = pso.swarm.population_size
-
-        self.particles = None
+        self.update_particles(self.pso.swarm.particles)
 
     def run_pso(self, max_generations: int):
         if self.pso is None:
@@ -32,15 +30,21 @@ class PSOThreadRunner:
         if self.pso_thread is not None:
             self.stop()
 
-        self.pso_thread = threading.Thread(target=self.pso.optimize(
-            max_generations, 
-            track_stats=False, 
-            export_particles=self.update_particles,
-            early_stopping_tolerance=self.early_stopping_tolerance
-        ))
-        self.pso_thread.run()
+        self.pso_thread = threading.Thread(
+            target=partial(
+                self.pso.optimize,
+                max_generations,
+                track_stats=False,
+                export_particles=self.update_particles,
+                early_stopping_tolerance=self.early_stopping_tolerance
+            )
+        )
+        self.pso_thread.start()
 
     def stop(self):
+        self.particles = None
+        self.num_frames = 0
+        self.particle_queue = queue.Queue()
         if self.pso_thread is None:
             return
         
@@ -69,7 +73,7 @@ class PSOThreadRunner:
                 return None
             else:
                 return self.particles.copy()
-        
+
         time_now = time.time_ns()
         time_diff = (time_now - self.last_frame_time) // 1_000_000
 
@@ -79,5 +83,5 @@ class PSOThreadRunner:
             self.particles = self.particle_queue.get()
         elif self.particles is None:
             return None
-        
+
         return self.particles.copy()

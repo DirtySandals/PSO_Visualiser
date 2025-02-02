@@ -206,6 +206,10 @@ class Swarm:
         positions = np.array([particle.position for particle in self.particles])
         return np.mean(positions, axis=0)
 
+    def get_distance_to_optimum(self, center_of_mass):
+        """Get function for the mean distance to the optimum of the problem"""
+        return np.linalg.norm(self.problem.optimum - center_of_mass)
+
     def get_std(self, center_of_mass):
         """Get function for standard deviation of the positions of the particles"""
         positions = np.array([particle.position for particle in self.particles])
@@ -252,20 +256,21 @@ class ParticleInitializer:
     def initial_bounds_uniform_positions(swarm: Swarm, problem: OptimizationProblem):
         """Initialise swarm with uniform random position within problem initial bounds"""
         # Obtain the maximum and minimum values for each dimensions
-        max = problem.initialization_bounds[:, 1]
-        min = problem.initialization_bounds[:, 0]
+        max = problem.boundaries[:, 1]
+
         for particle in swarm.particles:            
-            particle.position = np.random.uniform(low=min, high=max)
+            particle.position = np.random.uniform(low=max/2, high=max)
 
 
 class Optimizer(ABC):
     """
     Base class for PSO algorithms, for a given OptimizationProblem
     """
-    def __init__(self, problem: OptimizationProblem, population_size: int):
+    def __init__(self, problem: OptimizationProblem, population_size: int, use_inertia_weight: bool=False):
         """Initialise problem and swarm"""
         self.problem = problem
         self.swarm = Swarm(population_size, problem)
+        self.use_inertia_weight = use_inertia_weight
         self.c1 = 2.05
         self.c2 = 2.05
         self.constriction_factor = 0.72984
@@ -277,7 +282,7 @@ class Optimizer(ABC):
     def stop(self):
         self.stop_alg = True
 
-    def optimize(self, max_generations: int, use_inertia_weight: bool=False, early_stopping_tolerance: int=2000, export_particles=None, track_stats=True):
+    def optimize(self, max_generations: int, early_stopping_tolerance: int=2000, export_particles=None, track_stats=True):
         self.stop_alg = False
         """ Optimization process for PSO """
         self.init_metrics(max_generations)
@@ -294,7 +299,7 @@ class Optimizer(ABC):
                 self.stop_alg = False
                 break
 
-            if (use_inertia_weight):
+            if (self.use_inertia_weight):
                 inertia_weight = self.calculate_nonlinear_inertia_weight(generation, max_generations)
                 self.optimize_generation(inertia_weight)
             else:
@@ -313,11 +318,7 @@ class Optimizer(ABC):
 
             if (generation - best_generation) > early_stopping_tolerance:
                 print(f"Early stopping at generation {generation + 1}")
-                self.pad_stats(max_generations, generation)
                 break
-            # elif self.std[generation] < 0.025:
-            #     print(f"Early stopping at generation {generation + 1} due to std: {self.std[generation]}")
-            #     break
     
     def calculate_nonlinear_inertia_weight(self, t, T):
         """ Calculates the inertia weight using non-linear adjustment """
@@ -356,14 +357,6 @@ class Optimizer(ABC):
         self.best_fitness_values[generation] = best_fitness
         self.std[generation] = std
         self.mean_velocity_lengths[generation] = mean_velocity_length
-
-    def pad_stats(self, max_generations: int, current_generation: int):
-        """ Pads the tracked metrics with NaN for unfinished generations """
-        for i in range(max_generations - (current_generation + 1)):
-            index = current_generation + 1 + i
-            self.best_fitness_values[index] = np.nan
-            self.std[index] = np.nan
-            self.mean_velocity_lengths[index] = np.nan
             
 class StandardPSO(Optimizer):
     """ 
@@ -373,7 +366,7 @@ class StandardPSO(Optimizer):
         super().__init__(problem, population_size)
 
         # Initialise the swarm's positions
-        ParticleInitializer.uniform_random_positions(self.swarm, self.problem)
+        ParticleInitializer.initial_bounds_uniform_positions(self.swarm, self.problem)
         #Initialise the swarm's velocities
         ParticleInitializer.uniform_random_velocity(self.swarm, 0.5)
         Lbest.init_topology(self.swarm)
@@ -398,9 +391,9 @@ class InertiaWeightPSO(Optimizer):
     Uses non-linear inertia weight
     """
     def __init__(self, problem: OptimizationProblem, population_size: int, topology_type: Topology):
-        super().__init__(problem, population_size)
+        super().__init__(problem, population_size, True)
 
-        ParticleInitializer.uniform_random_positions(self.swarm, self.problem)
+        ParticleInitializer.initial_bounds_uniform_positions(self.swarm, self.problem)
         ParticleInitializer.uniform_random_velocity(self.swarm, 0.5)
         topology_type.init_topology(self.swarm)
 
