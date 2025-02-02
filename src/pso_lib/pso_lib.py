@@ -262,20 +262,23 @@ class Optimizer(ABC):
     """
     Base class for PSO algorithms, for a given OptimizationProblem
     """
-    def __init__(self, problem: OptimizationProblem, population_size: int, inertia: bool):
+    def __init__(self, problem: OptimizationProblem, population_size: int):
         """Initialise problem and swarm"""
         self.problem = problem
         self.swarm = Swarm(population_size, problem)
-        self.inertia = False
         self.c1 = 2.05
         self.c2 = 2.05
         self.constriction_factor = 0.72984
         self.w_max = 0.9  # Initial inertia weight
         self.w_min = 0.4  # Final inertia weight
         self.n = 0.1      # Modulation index
+        self.stop_alg = False
 
-    @abstractmethod
-    def optimize(self, max_generations: int, use_inertia_weight: bool, early_stopping_tolerance: int=2000):
+    def stop(self):
+        self.stop_alg = True
+
+    def optimize(self, max_generations: int, use_inertia_weight: bool=False, early_stopping_tolerance: int=2000, export_particles=None, track_stats=True):
+        self.stop_alg = False
         """ Optimization process for PSO """
         self.init_metrics(max_generations)
 
@@ -283,14 +286,26 @@ class Optimizer(ABC):
         best_found_fitness = sys.maxsize
         generation = 0
 
+        if export_particles is not None:
+            export_particles(self.swarm.particles)
+
         for generation in range(max_generations):
+            if self.stop_alg:
+                self.stop_alg = False
+                break
+
             if (use_inertia_weight):
                 inertia_weight = self.calculate_nonlinear_inertia_weight(generation, max_generations)
                 self.optimize_generation(inertia_weight)
             else:
                 self.optimize_generation()
-            # Update metrics
-            self.track_metrics(generation)
+
+            if track_stats:
+                # Update metrics
+                self.track_metrics(generation)
+
+            if export_particles is not None:
+                export_particles(self.swarm.particles)
 
             if self.min_fitness < best_found_fitness:
                 best_generation = generation
@@ -300,6 +315,9 @@ class Optimizer(ABC):
                 print(f"Early stopping at generation {generation + 1}")
                 self.pad_stats(max_generations, generation)
                 break
+            # elif self.std[generation] < 0.025:
+            #     print(f"Early stopping at generation {generation + 1} due to std: {self.std[generation]}")
+            #     break
     
     def calculate_nonlinear_inertia_weight(self, t, T):
         """ Calculates the inertia weight using non-linear adjustment """
@@ -309,7 +327,6 @@ class Optimizer(ABC):
     def update_velocity_position(self, particle: Particle, inertia_weight: Optional[float]=None):
         pass
 
-    @abstractmethod
     def optimize_generation(self, inertia_weight: Optional[float]=None):
         """ Single generation optimization with inertia weight adjustment """
         for particle in self.swarm.particles:
@@ -363,14 +380,6 @@ class StandardPSO(Optimizer):
 
         self.swarm.calculate_fitness()
 
-    def optimize(self, max_generations: int, early_stopping_tolerance=2000):
-        """ Optimization process for Standard PSO """
-        super().optimize(max_generations, False, early_stopping_tolerance)
-
-    def optimize_generation(self, inertia_weight: Optional[float]=None):
-        """ Single generation optimization for Standard PSO """
-        super().optimize_generation(None)
-
     def update_velocity_position(self, particle: Particle, inertia_weight: Optional[float]=None):
         """ Updates particle velocity and position """
         rand1 = np.random.rand(self.problem.dimension_size)
@@ -396,14 +405,6 @@ class InertiaWeightPSO(Optimizer):
         topology_type.init_topology(self.swarm)
 
         self.swarm.calculate_fitness()
-
-    def optimize(self, max_generations: int, early_stopping_tolerance=1e-8):
-        """ Optimization process with inertia weight adjustment """
-        super().optimize(max_generations, True, early_stopping_tolerance)
-
-    def optimize_generation(self, inertia_weight: Optional[float]=None):
-        """ Single generation optimization with inertia weight adjustment """
-        super().optimize_generation(inertia_weight)
 
     def update_velocity_position(self, particle: Particle, inertial_weight: float):
         """ Updates particle velocity and position """

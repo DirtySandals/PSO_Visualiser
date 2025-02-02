@@ -7,8 +7,9 @@ from typing import List, Tuple
 from Button import Button
 from pso_lib import *
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
+from PSOThreadRunner import PSOThreadRunner
+from pso_display import *
+
 # Initialise pygame and screen variables
 pygame.init()
 
@@ -21,18 +22,27 @@ background = (81, 213, 224)
 
 clock = pygame.time.Clock()
 
+pso_runner = PSOThreadRunner()
+
 font_path = "./assets/font.ttf"
 
 problems = {
-    "Sphere/Parabola": SphereParabola,
-    "Schwefel 1.2": Schwefel,
-    "Generalised Rosenbrock": GeneralisedRosenbrock,
-    "Generalised Schwefel": GeneralisedSchwefel,
-    "Generalised Rastrigin": GeneralisedRastrigin,
-    "Ackley Problem": AckleyProblem,
-    "Generalised Griewank": GeneralisedGriewank,
-    "Six-Hump Camel-Back": SixHumpCamelBack,
-    "Goldstein-Price": GoldsteinPrice
+    "Sphere/Parabola": SphereParabola(2),
+    "Schwefel 1.2": Schwefel(2),
+    "Generalised Rosenbrock": GeneralisedRosenbrock(2),
+    "Generalised Schwefel": GeneralisedSchwefel(2),
+    "Generalised Rastrigin": GeneralisedRastrigin(2),
+    "Ackley Problem": AckleyProblem(2),
+    "Generalised Griewank": GeneralisedGriewank(2),
+    "Six-Hump Camel-Back": SixHumpCamelBack(),
+    "Goldstein-Price": GoldsteinPrice()
+}
+
+topology_options = {
+    "GBest": Gbest,
+    "LBest": Lbest,
+    "Star": Star,
+    "Random50": Random50
 }
 
 back_button = Button(
@@ -44,16 +54,14 @@ back_button = Button(
     hovering_color="White"
 )
 
-point_color = (255, 0, 0)
-point_radius = 5
+particle_color = (255, 0, 0)
+particle_radius = 5
 
-graph_width = WIDTH * 0.60
-graph_height = HEIGHT * 0.60
-graph_center_x = WIDTH // 2
-graph_center_y = HEIGHT // 2
-graph_color = (255, 255, 255)
-
-graph = pygame.Rect(graph_center_x - graph_width // 2, graph_center_y - graph_height // 2, graph_width, graph_height)
+heatmap_side_length = 450
+heatmap_center_x = WIDTH // 2
+heatmap_center_y = HEIGHT // 2
+heatmap_left = heatmap_center_x - (heatmap_side_length // 2)
+heatmap_top = heatmap_center_y - (heatmap_side_length // 2)
 
 # Quit function to exit game gracefully
 def quit_gui() -> None:
@@ -61,19 +69,19 @@ def quit_gui() -> None:
     sys.exit()
     
 # Displays screen for showing algorithm work    
-def display_alg(points: List[Tuple[int, int]], inverover: bool, mutator: str, crossover: str, 
-                selector: str, pop_size: str) -> None:
+def display_alg(problem: OptimizationProblem, standard_pso: bool, pop_size: str, topology: str="") -> None:
     start_button = Button(
         image=None,
-        pos=(WIDTH // 2, HEIGHT * 6 // 7),
+        pos=(WIDTH // 2, 550),
         text_input="Start Algorithm",
         font=pygame.font.Font(font_path, 24),
         base_color=(0, 0, 0),
         hovering_color="White"
     )
     
-    line_color = (0, 0, 0)
-    line_width = int(point_radius * 1.3)
+    pop_size = int(pop_size)
+
+    heatmap = generate_heatmap(pygame, problem, heatmap_side_length, 100)
 
     while True:
         screen.fill(background)
@@ -82,25 +90,19 @@ def display_alg(points: List[Tuple[int, int]], inverover: bool, mutator: str, cr
 
         back_button.changeColor(mouse_pos)
         back_button.update(screen)
-        
-        pygame.draw.rect(screen, graph_color, graph)
-        
-        # Draw hamiltonian cycle path between points via their indexes
-        if len(process.best_route) > 0:
-            for i, city in enumerate(process.best_route):
-                index = process.best_route[i]
-                next_index = process.best_route[(i + 1) % len(process.best_route)]
-                
-                pygame.draw.line(screen, line_color, points[index - 1], points[next_index - 1], line_width)
-        
-        # Draw problem points        
-        for point in points:
-            pygame.draw.circle(screen, point_color, point, point_radius)
 
         start_button.changeColor(mouse_pos)
         start_button.update(screen)
 
-            
+        screen.blit(heatmap, (heatmap_left, heatmap_top))
+
+        particles = pso_runner.get_particles()
+    
+        if particles is not None:
+            particles = scale_particles(particles, heatmap_side_length, heatmap_left, heatmap_top)
+            for particle in particles:
+                pygame.draw.circle(screen, particle_color, (particle[0], particle[1]), particle_radius)
+
         # Handle clickable events
         for event in pygame.event.get():
             # Quit game
@@ -109,18 +111,28 @@ def display_alg(points: List[Tuple[int, int]], inverover: bool, mutator: str, cr
             if event.type == pygame.MOUSEBUTTONDOWN:
                 # Go back to previous screen and stop process from running algorithm
                 if back_button.checkForInput(mouse_pos):
-                    process.stop()
+                    pso_runner.stop()
                     return
                 # Start the algorithm when button pressed
                 if start_button.checkForInput(mouse_pos):
-                    process.stop()
-                    process.start_ga(inverover, 20000, pop_size, mutator, crossover, selector)
+                    pso_runner.stop()
+                    pso = None
+
+                    if standard_pso:
+                        pso = StandardPSO(problem, pop_size)            
+                    else:
+                        topology = topology_options[topology]
+                        pso = InertiaWeightPSO(problem, pop_size, topology)
+
+                    pso_runner.load_alg(pso)
+                    
+                    pso_runner.run_pso(10000)
         
         clock.tick(60)
         pygame.display.update()
         
 # Allows user to choose genetic algorithm they want to use on their problem
-def configure_algorithm(points: List[Tuple[int, int]]) -> None:
+def configure_algorithm(problem: OptimizationProblem) -> None:
     # Handle clicking on button
     def handle_option_click(options, mouse_pos, current_value):
         for option in options:
@@ -136,8 +148,9 @@ def configure_algorithm(points: List[Tuple[int, int]]) -> None:
     selected_algorithm = None
     
     # Default algorithm
-    selected_topology = "inversion"
+    selected_topology = "GBest"
     selected_population_size = "50"
+
     # Create grid layout for options
     option_rows = [200, 350]
     option_cols = [250, 550]
@@ -256,7 +269,7 @@ def configure_algorithm(points: List[Tuple[int, int]]) -> None:
             screen.blit(topology_text, topology_rect)
             # If option selected, change color to red, else color is black
             for option in topologies:
-                if option["value"] == selected_mutator:
+                if option["value"] == selected_topology:
                     option["button"].base_color = (255, 0, 0)
                 else:
                     option["button"].base_color = (0, 0, 0)
@@ -294,14 +307,14 @@ def configure_algorithm(points: List[Tuple[int, int]]) -> None:
                 if selected_algorithm is None:
                     if standard_button.checkForInput(mouse_pos):
                         selected_algorithm = AlgorithmType.InverOver
-                        display_alg(points, True, None, None, None, None)
+                        display_alg(problem, True, "200")
                         return
                     elif custom_button.checkForInput(mouse_pos):
                         selected_algorithm = AlgorithmType.Custom
                 # Select option
                 elif selected_algorithm is AlgorithmType.Custom:
                     if next_button.checkForInput(mouse_pos):
-                        display_alg(points, False, selected_mutator, selected_crossover, selected_selector, selected_population_size)
+                        display_alg(problem, False, selected_population_size, selected_topology)
                         return
                     
                     selected_topology = handle_option_click(topologies, mouse_pos, selected_topology)
@@ -422,11 +435,9 @@ def select_equation() -> None:
                 # Detect clicking on button
                 for button in buttons:
                     if button.checkForInput(mouse_pos):
-                        # Load file on process
-                        process.load_file(button.text_input)
-                        # Retrieve coords from file
+                        problem = problems[button.text_input]
                         # Go to next page to configure algorithm
-                        configure_algorithm()
+                        configure_algorithm(problem)
                         break
         
         clock.tick(60)
@@ -435,7 +446,7 @@ def select_equation() -> None:
 # Main menu for application
 def main_menu() -> None:
     # Init buttons
-    button_font = pygame.font.Font(font_path, 24)
+    button_font = pygame.font.Font(font_path, 20)
     
     std_eqn_button = Button(
         image=None,
@@ -463,29 +474,7 @@ def main_menu() -> None:
             base_color=(0, 0, 0),
             hovering_color="White"
     )
-    ackley_func = SixHumpCamelBack()
-    min = ackley_func.boundaries[0][0]
-    max = ackley_func.boundaries[0][1]
-
-    x = np.linspace(min, max, 100)
-    y = np.linspace(min, max, 100)
-
-    X, Y = np.meshgrid(x, y)
-
     
-    Z = np.array([ackley_func.evaluate(np.array([X[i][j], Y[i][j]])) for i in range(X.shape[0]) for j in range(X.shape[1])])
-    Z = Z.reshape(X.shape)
-
-    Z_min, Z_max = Z.min(), Z.max()
-    Z_norm = (Z - Z_min) / (Z_max - Z_min)  # Normalize between 0 and 1
-    
-    # Convert Z values into a colormap
-    colormap = cm.viridis  # Change colormap if needed
-    colors = (colormap(Z_norm)[:, :, :3] * 255).astype(np.uint8)  # RGB values
-
-    # Convert the color grid into a Pygame surface
-    heatmap_surface = pygame.surfarray.make_surface(colors.transpose(1, 0, 2))
-    scaled_surface  =pygame.transform.scale(heatmap_surface, (500, 500))
     while True:
         screen.fill(background)
         
@@ -494,7 +483,7 @@ def main_menu() -> None:
         quit_button.changeColor(mouse_pos)
         quit_button.update(screen)
         # Display title
-        title_font = pygame.font.Font(font_path, 42)
+        title_font = pygame.font.Font(font_path, 24)
         menu_title_1 = title_font.render("Particle Swarm Optimisation", True, (0, 0, 0), None)
         menu_title_rect_1 = menu_title_1.get_rect(center=(WIDTH // 2, HEIGHT // 4))
         
@@ -509,7 +498,7 @@ def main_menu() -> None:
         for button in [std_eqn_button, custom_eqn_button]:
             button.changeColor(mouse_pos)
             button.update(screen)
-        screen.blit(scaled_surface, ((WIDTH - scaled_surface.get_width()) // 2, (HEIGHT - scaled_surface.get_height()) // 2))
+
         try:
             for event in pygame.event.get():
                 # Quit game
